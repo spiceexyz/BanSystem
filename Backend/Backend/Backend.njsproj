@@ -41,6 +41,9 @@
     <Compile Include="routes\index.js">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="routes\login.js">
+      <SubType>Code</SubType>
+    </Compile>
     <Content Include="package.json" />
     <Content Include="public\stylesheets\style.css">
       <SubType>Code</SubType>

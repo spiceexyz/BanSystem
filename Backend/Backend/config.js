@@ -7,5 +7,10 @@
 			user: 'user',
 			pass: 'pass'
 		}
+	},
+	steam: {
+		returnUrl: 'http://localhost:80/adminPanel',
+		realm: 'http://localhost:80/',
+		apiKey: 'XXXXXXXXXXXXXXXXXXXXXXXXXXX'
 	}
 }

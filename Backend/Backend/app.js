@@ -17,6 +17,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', require('./routes/index'));
 app.use('/addBan', require('./routes/addBan'));
+app.use('/login', require('./routes/login'));
 
 app.use((request, response, next) => {
 	var err = new Error('Not Found');
