@@ -32,6 +32,9 @@
     <Compile Include="config.js">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="models\ServerOwner.js">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="routes\addBan.js">
       <SubType>Code</SubType>
     </Compile>
@@ -54,6 +57,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="models\" />
     <Folder Include="public\" />
     <Folder Include="public\stylesheets\" />
     <Folder Include="views\" />
