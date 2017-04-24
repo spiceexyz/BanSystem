@@ -9,7 +9,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("BanSystem", "PsychoTea", "1.0.0")]
+    [Info("BanSystem", "PsychoTea&Spicy", "1.0.0")]
 
     class BanSystem : RustPlugin
     {
