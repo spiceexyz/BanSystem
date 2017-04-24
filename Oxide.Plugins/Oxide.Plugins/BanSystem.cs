@@ -12,10 +12,28 @@ namespace Oxide.Plugins
 
     class BanSystem : RustPlugin
     {
-        [ChatCommand("test")]
-        void testCommand(BasePlayer player, string command, string[] args)
-        {
+        #region Classes
 
-        }
+        #endregion
+
+        #region Oxide Hooks
+
+        #endregion
+
+        #region Chat Commands
+
+        #endregion
+
+        #region Console Commands
+
+        #endregion
+
+        #region Functions
+
+        #endregion
+
+        #region Helpers
+
+        #endregion
     }
 }
