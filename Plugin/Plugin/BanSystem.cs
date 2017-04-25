@@ -6,15 +6,18 @@ using Oxide;
 using Oxide.Plugins;
 using UnityEngine;
 using Newtonsoft.Json;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
     [Info("BanSystem", "PsychoTea&Spicy", "1.0.0")]
 
-    class BanSystem : RustPlugin
+    class BanSystem : CovalencePlugin
     {
         const string permAdmin = "bansystem.admin";
         const string permBan = "bansystem.ban";
+        const string permTempban = "bansystem.tempban";
+        const string permKick = "bansystem.kick";
         const string permConfig = "bansystem.config";
         const string permShowBans = "bansystem.showbans";
         const string permShowBansCmd = "bansystem.showbanscmd";
@@ -36,12 +39,16 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 { "NoPermission", "You don't have permission to use this command." },
-                { "ChatPrefix", "<color=#ff3333>BanSystem: </color>" },
+                { "ChatPrefix", "[#ff3333]BanSystem: [/#]" },
                 { "NoPlayersFound", "Error! {0} players were found with the name or ID {1}." },
 
                 { "IncorrectUsage", "Incorrect usage! /bs {ban/kick/mirror/show/config/banlist/remotebanlist}" },
-                { "IncorrectUsage-Ban", "Incorrect usage! /bs ban {name/userid} [time (s/m/h/d/w/mo/y)]" },
-                { "IncorrectUsage-Ban-Time", "Incorrect time! /bs ban {name/userid} {30s/10m/3h/1d/2w/4mo/1y}" }
+                { "IncorrectUsage-Ban", "Incorrect usage! /bs ban {name/userid} {reason}" },
+                { "IncorrectUsage-Tempban", "Incorrect usage! /bs tempban {name/userid} {30s/10m/3h/1d/2w/4mo/1y} {reason}" },
+                { "IncorrectUsage-Kick", "Incorrect usage! /bs kick {name/userid} {reason}" },
+
+                { "Ban-Permaban", "{0} was permabanned from the server by {1} for {2}." },
+                { "Ban-Tempban", "{0} was tempbanned from the server by {1} for {2}, for {3}." }
             }, this, "en");
         }
 
@@ -55,12 +62,25 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Check Prefix Enabled")]
             public bool ChatPrefixEnabled;
-            
+
+            [JsonProperty(PropertyName = "Print Bans To Chat")]
+            public bool PrintBansToChat;
+
+            [JsonProperty(PropertyName = "Print Tempbans To Chat")]
+            public bool PrintTempbansToChat;
+
+            [JsonProperty(PropertyName = "Print Kicks To Chat")]
+            public bool PrintKicksToChat;
+
             public static ConfigFile DefaultConfig()
             {
                 return new ConfigFile
                 {
-                    ChatPrefixEnabled = true
+                    ChatPrefixEnabled = true,
+
+                    PrintBansToChat = true,
+                    PrintTempbansToChat = true,
+                    PrintKicksToChat = true
                 };
             }
         }
@@ -79,61 +99,104 @@ namespace Oxide.Plugins
 
         #region Chat Commands
 
-        [ChatCommand("bs")]
-        void BSCommand(BasePlayer player, string command, string[] args)
+        [Command("bs")]
+        void BSCommand(IPlayer player, string command, string[] args)
         {
             if (args.Length < 1)
             {
-                SendReply(player, GetMessage("IncorrectUsage", player));
+                player.Message(GetMessage("IncorrectUsage", player));
                 return;
             }
 
-            if (args[0] == "ban")
+            if (args[0].ToLower() == "ban")
             {
                 if (!HasPermAdmin(player) && !HasPermRaw(player, permBan))
                 {
-                    SendReply(player, GetMessage("NoPermission", player));
+                    player.Message(GetMessage("NoPermission", player));
                     return;
                 }
 
-                if (args.Length < 2)
+                if (args.Length < 3)
                 {
-                    SendReply(player, GetMessage("IncorrectUsage-Ban", player));
+                    player.Message(GetMessage("IncorrectUsage-Ban", player));
                     return;
                 }
-
-                int seconds = -1;
 
                 int count;
-                BasePlayer targetPlayer = FindPlayer(args[1], out count);
+                IPlayer targetPlayer = FindPlayer(args[1], out count);
                 if (count != 1 || targetPlayer == null)
                 {
-                    SendReply(player, GetMessage("NoPlayersFound", player, count.ToString(), args[1]));
+                    player.Message(GetMessage("NoPlayersFound", player, count.ToString(), args[1]));
                     return;
                 }
 
-                if (args.Length >= 3)
-                {
-                    seconds = TimeToSeconds(args[3]);
-                    if (seconds == -1)
-                    {
-                        SendReply(player, GetMessage("IncorrectUsage-Ban-Time", player));
-                        return;
-                    }
-                }
+                string reason = string.Join(" ", args.Skip(2));
 
-                if (seconds != -1)
-                {
-                    //Tempban
-                    return;
-                }
-
-                //Permaban
+                Permaban(targetPlayer.Id, player, reason);
 
                 return;
             }
 
-            SendReply(player, GetMessage("IncorrectUsage", player));
+            if (args[0].ToLower() == "tempban")
+            {
+                if (!HasPermAdmin(player) && !HasPermRaw(player, permTempban))
+                {
+                    player.Message(GetMessage("NoPermission", player));
+                    return;
+                }
+
+                if (args.Length < 4)
+                {
+                    player.Message(GetMessage("IncorrectUsage-Tempban", player));
+                    return;
+                }
+
+                int count;
+                IPlayer targetPlayer = FindPlayer(args[1], out count);
+                if (count != 1 || targetPlayer == null)
+                {
+                    player.Message(GetMessage("NoPlayersFound", player, count.ToString(), args[1]));
+                    return;
+                }
+
+                string time = args[2];
+                string reason = string.Join(" ", args.Skip(3));
+
+                Tempban(targetPlayer.Id, player, reason, time);
+
+                return;
+            }
+
+            if (args[0].ToLower() == "kick")
+            {
+                if (!HasPermAdmin(player) && !HasPermRaw(player, permKick))
+                {
+                    player.Message(GetMessage("NoPermission", player));
+                    return;
+                }
+
+                if (args.Length < 3)
+                {
+                    player.Message(GetMessage("IncorrectUsage-Kick", player));
+                    return;
+                }
+
+                int count;
+                IPlayer targetPlayer = FindPlayer(args[1], out count);
+                if (count != 1 | targetPlayer == null)
+                {
+                    player.Message(GetMessage("NoPlayersFound", player, count.ToString(), args[1]));
+                    return;
+                }
+
+                string reason = string.Join(" ", args.Skip(2));
+
+                Kick(targetPlayer, player, reason);
+
+                return;
+            }
+
+            player.Message(GetMessage("IncorrectUsage", player));
         }
 
         #endregion
@@ -142,34 +205,51 @@ namespace Oxide.Plugins
 
         #region Banning
 
-        //if runner is null, assume it's console/RCON
-
-        void Permaban(BasePlayer target, BasePlayer runner)
+        void Permaban(string targetId, IPlayer runnerPlayer, string reason)
         {
+            string playerName = TryFindName(targetId) ?? targetId.ToString();
+            string runnerName = runnerPlayer?.Name ?? "SERVER";
 
+            if (config.PrintBansToChat)
+            {
+                BroadcastToChat("Ban-Permaban", playerName, runnerName, reason);
+            }
+
+            server.Ban(targetId.ToString(), reason);
         }
 
-        void Permaban(ulong targetid, BasePlayer runner)
+        void Tempban(string targetId, IPlayer runnerPlayer, string reason, string time)
         {
+            string playerName = TryFindName(targetId) ?? targetId.ToString();
+            string runnerName = runnerPlayer?.Name ?? "SERVER";
+            TimeSpan timeSpan = TimeSpan.FromSeconds(TimeToSeconds(time));
 
+            if (config.PrintTempbansToChat)
+            {
+                BroadcastToChat("Ban-Tempban", playerName, runnerName, reason, time);
+            }
+
+            server.Ban(targetId, reason, timeSpan);
         }
 
-        void Tempban(BasePlayer target, BasePlayer runner)
+        void Kick(IPlayer targetPlayer, IPlayer runnerPlayer, string reason)
         {
+            string runnerName = runnerPlayer?.Name ?? "SERVER";
 
-        }
+            if (config.PrintKicksToChat)
+            {
+                BroadcastToChat("Kick", targetPlayer.Name, runnerName, reason);
+            }
 
-        void Tempban(ulong targetid, BasePlayer runner)
-        {
-
+            targetPlayer.Kick(reason);
         }
 
         #endregion
 
-        BasePlayer FindPlayer(string input, out int count)
+        IPlayer FindPlayer(string input, out int count)
         {
             count = 1;
-            var bplSearch = BasePlayer.activePlayerList.Where(x => x.displayName.Contains(input));
+            var bplSearch = covalence.Players.All.Where(x => x.Name.Contains(input));
             if (bplSearch.Count() > 1)
             {
                 count = bplSearch.Count();
@@ -180,34 +260,18 @@ namespace Oxide.Plugins
                 return bplSearch.FirstOrDefault();
             }
 
-            var idSearch = BasePlayer.activePlayerList.Where(x => x.UserIDString == input);
+            var idSearch = covalence.Players.All.Where(x => x.Id == input);
             if (idSearch.Count() == 1) return idSearch.FirstOrDefault();
 
-            var sleeperSearch = BasePlayer.sleepingPlayerList.Where(x => x.displayName.Contains(input));
-            if (sleeperSearch.Count() > 1)
-            {
-                count = sleeperSearch.Count();
-                return null;
-            }
-            else if (sleeperSearch.Count() == 1)
-            {
-                return sleeperSearch.FirstOrDefault();
-            }
-
-            var sleeperIdSearch = BasePlayer.sleepingPlayerList.Where(x => x.UserIDString == input);
-            if (sleeperIdSearch.Count() > 1)
-            {
-                count = sleeperIdSearch.Count();
-                return null;
-            }
-            else if (sleeperIdSearch.Count() == 1)
-            {
-                return sleeperIdSearch.FirstOrDefault();
-            }
-
-            // TODO: Add support for offline players
-
             return null;
+        }
+
+        string TryFindName(string userId) => covalence.Players.All.Where(x => x.Id == userId).FirstOrDefault()?.Name;
+
+        void BroadcastToChat(string key, params string[] args)
+        {
+            foreach (var player in covalence.Players.Connected)
+                player.Message(covalence.FormatText(GetMessage(key, player, args)));
         }
 
         int TimeToSeconds(string input)
@@ -254,11 +318,11 @@ namespace Oxide.Plugins
 
         #region Helpers
 
-        bool HasPermAdmin(BasePlayer player) => (player.IsAdmin || HasPermRaw(player, permAdmin));
-        bool HasPermRaw(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
+        bool HasPermAdmin(IPlayer player) => (player.IsAdmin || HasPermRaw(player, permAdmin));
+        bool HasPermRaw(IPlayer player, string perm) => permission.UserHasPermission(player.Id, perm);
 
-        string GetMessage(string key, BasePlayer player, params string[] args) => (config.ChatPrefixEnabled) ? GetMessageRaw("ChatPrefix", player) : "" + GetMessageRaw(key, player, args);
-        string GetMessageRaw(string key, BasePlayer player, params string[] args) => string.Format(lang.GetMessage(key, this, player.UserIDString), args);
+        string GetMessage(string key, IPlayer player, params string[] args) => (config.ChatPrefixEnabled) ? GetMessageRaw("ChatPrefix", player) : "" + GetMessageRaw(key, player, args);
+        string GetMessageRaw(string key, IPlayer player, params string[] args) => string.Format(lang.GetMessage(key, this, player.Id), args);
 
         #endregion
     }
