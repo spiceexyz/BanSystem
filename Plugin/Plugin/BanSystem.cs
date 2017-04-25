@@ -6,6 +6,7 @@ using Oxide;
 using Oxide.Plugins;
 using UnityEngine;
 using Newtonsoft.Json;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
@@ -23,6 +24,41 @@ namespace Oxide.Plugins
         const string permShowBansCmd = "bansystem.showbanscmd";
 
         readonly string[] validTimeFields = new string[] { "s", "m", "h", "d", "w", "mo", "y" };
+
+        #region Classes
+
+        class BanInfo
+        {
+            public string Name { get; private set; }
+            public string Id { get; private set; }
+            public string Reason { get; private set; }
+            public bool IsTempban { get; private set; }
+            public string BanLength { get; private set; }
+
+            public static BanInfo PermaBan(string Name, string Id, string Reason)
+            {
+                BanInfo ban = new BanInfo();
+                ban.Name = Name;
+                ban.Id = Id;
+                ban.Reason = Reason;
+                ban.IsTempban = false;
+                ban.BanLength = "";
+                return ban;
+            }
+
+            public static BanInfo TempBan(string Name, string Id, string Reason, string BanLength)
+            {
+                BanInfo ban = new BanInfo();
+                ban.Name = Name;
+                ban.Id = Id;
+                ban.Reason = Reason;
+                ban.IsTempban = true;
+                ban.BanLength = BanLength;
+                return ban;
+            }
+        }
+
+        #endregion
 
         #region Oxide Hooks
 
@@ -48,7 +84,9 @@ namespace Oxide.Plugins
                 { "IncorrectUsage-Kick", "Incorrect usage! /bs kick {name/userid} {reason}" },
 
                 { "Ban-Permaban", "{0} was permabanned from the server by {1} for {2}." },
-                { "Ban-Tempban", "{0} was tempbanned from the server by {1} for {2}, for {3}." }
+                { "Ban-Tempban", "{0} was tempbanned from the server by {1} for {2}, for {3}." },
+
+                { "BanList", "Showing all bans:" }
             }, this, "en");
         }
 
@@ -94,6 +132,19 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig() => config = ConfigFile.DefaultConfig();
 
         protected override void SaveConfig() => Config.WriteObject(config);
+
+        #endregion
+
+        #region Data
+
+        class StoredData
+        {
+            public List<BanInfo> Bans = new List<BanInfo>();
+        }
+        StoredData storedData;
+
+        void SaveData() => Interface.Oxide.DataFileSystem.WriteObject<StoredData>(this.Title, storedData);
+        void ReadData() => storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Title);
 
         #endregion
 
@@ -196,6 +247,25 @@ namespace Oxide.Plugins
                 return;
             }
 
+            if (args[0].ToLower() == "banlist")
+            {
+                if (!HasPermAdmin(player) && !HasPermRaw(player, permShowBansCmd))
+                {
+                    player.Message(GetMessage("NoPermission", player));
+                    return;
+                }
+
+                string message = GetMessage("BanList", player);
+                foreach (var ban in storedData.Bans)
+                {
+                    string nameOrId = string.IsNullOrEmpty(ban.Name) ? ban.Id : $"{ban.Name} ({ban.Id})";
+                    message += $"\n - {nameOrId}; Reason: {ban.Reason}" + ((ban.IsTempban) ? $"; Time: {ban.BanLength}" : "");
+                }
+                player.Message(message);
+
+                return;
+            }
+
             player.Message(GetMessage("IncorrectUsage", player));
         }
 
@@ -215,6 +285,10 @@ namespace Oxide.Plugins
                 BroadcastToChat("Ban-Permaban", playerName, runnerName, reason);
             }
 
+            BanInfo ban = BanInfo.PermaBan(TryFindName(targetId) ?? "", targetId, reason);
+            storedData.Bans.Add(ban);
+            SaveData();
+
             server.Ban(targetId.ToString(), reason);
         }
 
@@ -228,6 +302,10 @@ namespace Oxide.Plugins
             {
                 BroadcastToChat("Ban-Tempban", playerName, runnerName, reason, time);
             }
+
+            BanInfo ban = BanInfo.TempBan(TryFindName(targetId) ?? "", targetId, reason, time);
+            storedData.Bans.Add(ban);
+            SaveData();
 
             server.Ban(targetId, reason, timeSpan);
         }
