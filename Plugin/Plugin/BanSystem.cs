@@ -88,6 +88,8 @@ namespace Oxide.Plugins
 
                 { "BanList", "Showing all bans:" }
             }, this, "en");
+
+            ReadData();
         }
 
         #endregion
