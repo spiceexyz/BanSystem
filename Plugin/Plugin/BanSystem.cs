@@ -100,7 +100,7 @@ namespace Oxide.Plugins
         {
             [JsonProperty(PropertyName = "Check Prefix Enabled")]
             public bool ChatPrefixEnabled;
-
+            
             [JsonProperty(PropertyName = "Print Bans To Chat")]
             public bool PrintBansToChat;
 
